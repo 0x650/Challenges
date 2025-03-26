@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  web:
+    image: nginx:alpine
+    container_name: dingulator
+    ports:
+      - "5000:80"
+    volumes:
+      - ./dist:/usr/share/nginx/html
+    restart: unless-stopped
+
+
