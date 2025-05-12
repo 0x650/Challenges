@@ -1,0 +1,366 @@
+diff --git a/Application/application.c b/Application/application.c
+index 7f8bd7f..f8b6569 100644
+--- a/Application/application.c
++++ b/Application/application.c
+@@ -1,47 +1,27 @@
+-/* This is a small demo of the high-performance ThreadX kernel.  It includes examples of six
+-   threads of different priorities, message queues, semaphores, and event flags.  */
+-
+ #include   "tx_api.h"
+ 
+ #define     DEMO_STACK_SIZE 1024
+ 
+-/* Define the ThreadX object control blocks...  */
+-
+ TX_THREAD               thread_0;
+-TX_THREAD               thread_1;
+-TX_THREAD               thread_2;
+-TX_THREAD               thread_3;
+-TX_THREAD               thread_4;
+-TX_THREAD               thread_5;
+-TX_QUEUE                queue_0;
+-TX_SEMAPHORE            semaphore_0;
+-TX_EVENT_FLAGS_GROUP    event_flags_0;
+-
+ 
+-/* Define the counters used in the demo application...  */
+-
+-UINT           thread_0_counter = 0;
+-UINT           thread_1_counter = 0;
+-UINT           thread_1_messages_sent = 0;
+-UINT           thread_2_counter = 0;
+-UINT           thread_2_messages_received = 0;
+-UINT           thread_3_counter = 0;
+-UINT           thread_4_counter = 0;
+-UINT           thread_5_counter = 0;
++int seed = 4;
++extern void _tx_thread_schedule();
+ 
++int rand(void) {
++    seed = seed * 1103515245;
++    seed = seed + 0x650;
++    if (seed < 0) {seed = -seed;}
++    return seed;
++}
+ 
+ /* Define thread prototypes.  */
+ 
+ void    thread_0_entry(ULONG thread_input);
+-void    thread_1_entry(ULONG thread_input);
+-void    thread_2_entry(ULONG thread_input);
+-void    thread_3_and_4_entry(ULONG thread_input);
+-void    thread_5_entry(ULONG thread_input);
+ 
+ 
+ /* Define main entry point.  */
+ 
+-main()
++void main()
+ {
+ 
+     /* Enter the ThreadX kernel.  */
+@@ -67,198 +47,80 @@ CHAR    *pointer;
+ 			pointer, DEMO_STACK_SIZE, 
+ 			1, 1, TX_NO_TIME_SLICE, TX_AUTO_START);
+     pointer = pointer + DEMO_STACK_SIZE;
+-
+-    /* Create threads 1 and 2. These threads pass information through a ThreadX 
+-       message queue.  It is also interesting to note that these threads have a time
+-       slice.  */
+-    tx_thread_create(&thread_1, "thread 1", thread_1_entry, 1,  
+-			pointer, DEMO_STACK_SIZE, 
+-			16, 16, 4, TX_AUTO_START);
+-    pointer = pointer + DEMO_STACK_SIZE;
+-
+-    tx_thread_create(&thread_2, "thread 2", thread_2_entry, 2,  
+-			pointer, DEMO_STACK_SIZE, 
+-			16, 16, 4, TX_AUTO_START);
+-    pointer = pointer + DEMO_STACK_SIZE;
+-
+-    /* Create threads 3 and 4.  These threads compete for a ThreadX counting semaphore.  
+-       An interesting thing here is that both threads share the same instruction area.  */
+-    tx_thread_create(&thread_3, "thread 3", thread_3_and_4_entry, 3,  
+-			pointer, DEMO_STACK_SIZE, 
+-			8, 8, TX_NO_TIME_SLICE, TX_AUTO_START);
+-    pointer = pointer + DEMO_STACK_SIZE;
+-
+-    tx_thread_create(&thread_4, "thread 4", thread_3_and_4_entry, 4,  
+-			pointer, DEMO_STACK_SIZE, 
+-			8, 8, TX_NO_TIME_SLICE, TX_AUTO_START);
+-    pointer = pointer + DEMO_STACK_SIZE;
+-
+-    /* Create thread 5.  This thread simply pends on an event flag which will be set
+-       by thread_0.  */
+-    tx_thread_create(&thread_5, "thread 5", thread_5_entry, 5,  
+-			pointer, DEMO_STACK_SIZE, 
+-			4, 4, TX_NO_TIME_SLICE, TX_AUTO_START);
+-    pointer = pointer + DEMO_STACK_SIZE;
+-
+-    /* Create the message queue shared by threads 1 and 2.  */
+-    tx_queue_create(&queue_0, "queue 0", TX_1_ULONG, pointer, 100*sizeof(ULONG));
+-    pointer = pointer + (100*sizeof(ULONG));
+-
+-    /* Create the semaphore used by threads 3 and 4.  */
+-    tx_semaphore_create(&semaphore_0, "semaphore 0", 1);
+-
+-    /* Create the event flags group used by threads 1 and 5.  */
+-    tx_event_flags_create(&event_flags_0, "event flags 0");
+ }
+ 
+-
+-
+-/* Define the test threads.  */
+-
+-void    thread_0_entry(ULONG thread_input)
+-{
+-
+-UINT    status;
+-
+-    /* This thread simply sits in while-forever-sleep loop.  */
+-    while(1)
+-    {
+-
+-        /* Increment the thread counter.  */
+-        thread_0_counter++;
+-		/* Print results.  */
+-		
+-        printf("**** ThreadX Win32 Demonstration **** (c) 1996-2004 Express Logic, Inc.\n\n");
+-
+-        printf("           thread 0 events sent:          %d\n", thread_0_counter);
+-        printf("           thread 1 messages sent:        %d\n", thread_1_counter);
+-        printf("           thread 2 messages received:    %d\n", thread_2_counter);
+-        printf("           thread 3 obtained semaphore:   %d\n", thread_3_counter);
+-        printf("           thread 4 obtained semaphore:   %d\n", thread_4_counter);
+-        printf("           thread 5 events received:      %d\n", thread_5_counter);
+-		
+-
+-        /* Sleep for 100 ticks.  */
+-        tx_thread_sleep(100);
+-
+-        /* Set event flag 0 to wakeup thread 5.  */
+-        status =  tx_event_flags_set(&event_flags_0, 0x1, TX_OR);
+-
+-        /* Check status.  */
+-        if (status != TX_SUCCESS)
+-            break;
++int str_to_int(char* s) {
++    int sign = 1, res = 0, idx = 0;
++    // Ignore leading whitespaces
++    while (s[idx] == ' ') {
++        idx++;
+     }
+-}
+-
+-
+-void    thread_1_entry(ULONG thread_input)
+-{
+-
+-UINT    status;
+-
+-    /* This thread simply sends messages to a queue shared by thread 2.  */
+-    while(1)
+-    {
+-
+-        /* Increment the thread counter.  */
+-        thread_1_counter++;
+-
+-        /* Send message to queue 0.  */
+-        status =  tx_queue_send(&queue_0, &thread_1_messages_sent, TX_WAIT_FOREVER);
+-
+-        /* Check completion status.  */
+-        if (status != TX_SUCCESS)
+-            break;
+-
+-        /* Increment the message sent.  */
+-        thread_1_messages_sent++;
++    // Store the sign of number
++    if (s[idx] == '-' || s[idx] == '+') {
++        if (s[idx++] == '-') {
++            sign = -1;
++        }
++    }
++    // Construct the number digit by digit
++    while (s[idx] >= '0' && s[idx] <= '9') {
++        // Handling overflow/underflow test case
++        if (res > 2147483647 / 10 || (res == 2147483647 / 10 && s[idx] - '0' > 7)) {
++            return sign == 1 ? 2147483647 : -2147483648;
++        }
++        // Append current digit to the result
++        res = 10 * res + (s[idx++] - '0');
+     }
++    return res * sign;
+ }
+ 
++char flag[] = "=\x06\x0c\x03\t?";
+ 
+-void    thread_2_entry(ULONG thread_input)
+-{
+-
+-ULONG   received_message;
+-UINT    status;
+-
+-    /* This thread retrieves messages placed on the queue by thread 1.  */
+-    while(1)
+-    {
+-
+-        /* Increment the thread counter.  */
+-        thread_2_counter++;
+-
+-        /* Retrieve a message from the queue.  */
+-        status = tx_queue_receive(&queue_0, &received_message, TX_WAIT_FOREVER);
+-
+-        /* Check completion status and make sure the message is what we 
+-           expected.  */
+-        if ((status != TX_SUCCESS) || (received_message != thread_2_messages_received))
+-            break;
+-        
+-        /* Otherwise, all is okay.  Increment the received message count.  */
+-        thread_2_messages_received++;
++void retrieve_flag(int key, int shift) {
++    for (int i = 0; i < sizeof(flag) - 1; i++) {
++        flag[i] ^= key;
++        flag[i] -= (shift - 5);
+     }
+ }
+ 
+-
+-void    thread_3_and_4_entry(ULONG thread_input)
+-{
+-
+-UINT    status;
+-
+-
+-    /* This function is executed from thread 3 and thread 4.  As the loop
+-       below shows, these function compete for ownership of semaphore_0.  */
+-    while(1)
+-    {
+-
+-        /* Increment the thread counter.  */
+-        if (thread_input == 3)
+-            thread_3_counter++;
+-        else
+-            thread_4_counter++;
+-
+-        /* Get the semaphore with suspension.  */
+-        status =  tx_semaphore_get(&semaphore_0, TX_WAIT_FOREVER);
+-
+-        /* Check status.  */
+-        if (status != TX_SUCCESS)
+-            break;
+-
+-        /* Sleep for 2 ticks to hold the semaphore.  */
+-        tx_thread_sleep(2);
+-
+-        /* Release the semaphore.  */
+-        status =  tx_semaphore_put(&semaphore_0);
+-
+-        /* Check status.  */
+-        if (status != TX_SUCCESS)
+-            break;
++void gets(char *buffer, int length) {
++    char c = 0;
++    int index = 0;
++    while (c != '\r' && length--) {
++        c = __getchar();
++        __putchar(c);
++        buffer[index++] = c;
+     }
++    buffer[index++] = '\0';
++    __putchar('\n'); 
+ }
+ 
++/* Define the test threads.  */
+ 
+-void    thread_5_entry(ULONG thread_input)
++void thread_0_entry(ULONG thread_input)
+ {
+-
+-UINT    status;
+-ULONG   actual_flags;
+-
+-    /* This thread simply waits for an event in a forever loop.  */
+-    while(1)
+-    {
+-
+-        /* Increment the thread counter.  */
+-        thread_5_counter++;
+-
+-        /* Wait for event flag 0.  */
+-        status =  tx_event_flags_get(&event_flags_0, 0x1, TX_OR_CLEAR, 
+-                                                &actual_flags, TX_WAIT_FOREVER);
+-        /* Check status.  */
+-        if ((status != TX_SUCCESS) || (actual_flags != 0x1))
++    printf("Welcome to ThreadX!\n");
++    printf("Let's play a game :)\n");
++    printf("Can you guess what number I am thinking of?\n");
++    char buffer[64] = {0};
++    int number = 0;
++    int random = rand() % 100;
++
++    int fails = 0;
++    
++    for (;;) {
++        gets(buffer, 64);
++        number = str_to_int(buffer);
++        random = rand() % 100;
++        if (random == number) {
+             break;
++        }
++        printf("I wanted %d You entered %d\n", random, number);
++        fails++;
+     }
++    printf("You win!\n");
++    int key = ((unsigned int)_tx_thread_schedule & 0xff) - 0x1b;
++    retrieve_flag(key, fails);
++    printf("Here is your flag %s. Have a nice day!\n", flag);
++    tx_thread_terminate(&thread_0);
+ }
+ 
+diff --git a/board/versatilepb/pl011.c b/board/versatilepb/pl011.c
+index 7d8800a..98a0bfd 100644
+--- a/board/versatilepb/pl011.c
++++ b/board/versatilepb/pl011.c
+@@ -8,3 +8,8 @@ int __putchar(int c)
+ 	while (PL011_UARTFR & (1 << 5));
+ 	PL011_UARTDR = c & 0xff;
+ }
++
++char __getchar(void) {
++	while ((PL011_UARTFR & (1 << 4)));
++	return PL011_UARTDR & 0xff;
++}
+diff --git a/config.mk b/config.mk
+index 8695a7d..03a0c42 100644
+--- a/config.mk
++++ b/config.mk
+@@ -50,7 +50,7 @@ CONFIG_SHELL	:= $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
+ 
+ 
+ HOSTCC		= gcc
+-HOSTCFLAGS	= -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer
++HOSTCFLAGS	= -O2 -fomit-frame-pointer
+ HOSTSTRIP	= strip
+ 
+ #
+@@ -98,14 +98,14 @@ endif
+ 
+ CPPFLAGS += -DTX_DISABLE_STACK_CHECKING
+ CPPFLAGS += -I$(TOPDIR)/include -I$(TOPDIR)/src -I$(TOPDIR)/cpu/$(CPU)
+-CPPFLAGS += -fno-builtin -ffreestanding 	\
++CPPFLAGS += -Wno-implicit-function-declaration -fno-builtin -ffreestanding 	\
+ 	-isystem $(gccincdir) -pipe $(PLATFORM_CPPFLAGS)
+ 
+ ifdef BUILD_TAG
+-CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes \
++CFLAGS := $(CPPFLAGS) \
+ 	-DBUILD_TAG='"$(BUILD_TAG)"'
+ else
+-CFLAGS := $(CPPFLAGS) -Wall -Wstrict-prototypes
++CFLAGS := $(CPPFLAGS) 
+ endif
+ 
+ # avoid trigraph warnings while parsing pci.h (produced by NIOS gcc-2.9)
+diff --git a/threadx b/threadx
+deleted file mode 100644
+index 92394a6..0000000
+Binary files a/threadx and /dev/null differ
